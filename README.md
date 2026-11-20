@@ -61,6 +61,22 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | 輸出 | 256×256 的放大預覽圖；實際檔案為 `OUTPUT_DIR/<name>.png` |
 | Error Handling | 名稱不合法、尺寸不是 16×16、陣列形狀或數值範圍錯誤、型別不支援時，丟出說明原因的錯誤，讓 Agent 修正 |
 
+## 繪圖函式庫：`texture_kit`
+
+Agent 生成的程式碼可以 `from texture_kit import ...`，用現成的函式畫圖，不必自己對 uint8 陣列做運算。
+
+| 函式 | 用途 |
+| --- | --- |
+| `new_canvas(fill=None)` | 建立 16×16 RGBA 畫布，預設全透明 |
+| `shade(color, amount)` | 顏色變亮或變暗，自動限制在 0-255 |
+| `set_pixel` / `fill_rect` / `draw_line` | 單點、矩形、直線 |
+| `from_ascii` / `stamp_ascii` | 用文字圖案畫整張或局部，`.` 代表透明或不動 |
+| `mirror_x` / `outline` / `bevel` | 左右對稱、外框、光源從左上來的明暗邊 |
+
+設計原因：第一次用 9B 模型實測時，模型自己寫 `uint8` 陣列減法，數值溢位環繞（`25 - 50` 變成 `231`），畫出青色、黃綠色的雜點。函式庫改用 Python int 運算並限制範圍，座標統一為 `(x, y)`，超出畫布會丟出說明清楚的錯誤。
+
+測試：`pip install pytest && python -m pytest tests`
+
 ## 除錯
 
 - **連不上 LLM**：確認容器內能連到 `LLM_API_BASE`；若 server 在本機，改用 `http://host.containers.internal:11434/v1`。
