@@ -43,6 +43,8 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | `MAX_STEPS` | Agent 最多步數（重試上限） | `10` |
 | `OUTPUT_DIR` | PNG 輸出資料夾 | 容器內 `/app/output` |
 | `PORT` | Web UI 連接埠 | `7860` |
+| `REFERENCE_DIR` | 參考材質來源資料夾（jar / zip / 解壓後的資源包） | 容器內 `/app/reference` |
+| `INDEX_DIR` | 參考材質的 Chroma 索引資料夾 | 容器內 `/app/index` |
 | `CHAT_HEIGHT` | 對話區高度（CSS 長度，例如 `75vh`、`600px`） | `75vh` |
 
 ## 運作流程
@@ -82,3 +84,19 @@ Agent 生成的程式碼可以 `from texture_kit import ...`，用現成的函�
 
 - **連不上 LLM**：確認容器內能連到 `LLM_API_BASE`；若 server 在本機，改用 `http://host.containers.internal:11434/v1`。
 - **一直達到步數上限**：先看介面上每一步的錯誤訊息，必要時提高 `MAX_STEPS`。
+
+## 參考材質（選用）
+
+可以提供原版或模組的材質讓 Agent 畫圖前先查，學它的輪廓、明暗和色票。材質有版權，所以一律由使用者自己提供，不放進 repo（`reference/`、`index/` 已在 `.gitignore`）。
+
+兩種提供方式：
+
+1. **掛載資料夾**：把 `.jar`、`.zip` 或解壓後含 `assets/` 的資料夾放進 `reference/`，啟動時自動掃描：
+   ```bash
+   mkdir -p output reference index
+   podman run --rm -p 7860:7860 --env-file .env \
+     -v ./output:/app/output:Z -v ./reference:/app/reference:Z -v ./index:/app/index:Z mc-texture-agent
+   ```
+2. **對話中上傳**：在輸入框附加 `.jar` / `.zip`（只傳檔案、不輸入文字時不會啟動 Agent），會存到 `reference/uploads/` 並立即建立索引。
+
+索引範圍：`assets/<namespace>/textures/block(s)|item(s)/` 底下的 PNG，只用檔名做 embedding（Chroma 預設的 all-MiniLM-L6-v2）。每次啟動與每次上傳都是增量同步：沒變的檔案不重做，來源被刪掉會一併移除。Agent 透過 `find_reference_textures(query, kind, top_k)` 取得 16×16 的 ASCII 圖與色票。

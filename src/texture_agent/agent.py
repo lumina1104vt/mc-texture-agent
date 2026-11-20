@@ -6,6 +6,8 @@ import os
 
 from smolagents import CodeAgent, OpenAIServerModel
 
+from .reference import ReferenceIndex
+from .reference_tool import FindReferenceTexturesTool
 from .skill import load_skill_text
 from .tools import SaveTextureTool
 
@@ -51,18 +53,33 @@ Example (a gem on a stone background):
   preview = save_texture(image=img, name="example")
 """
 
+REFERENCE_INSTRUCTIONS = """\
 
-def build_agent() -> CodeAgent:
+Reference textures: the user supplied real Minecraft / mod textures. Before drawing a block or item that
+has a familiar counterpart, call find_reference_textures(query="ruby ore", kind="block") (query in English;
+kind is "block", "item" or "any"). Each result is a 16x16 ASCII grid with a palette. Study its silhouette,
+shading and palette, then draw your own original version with texture_kit; never paste a result unchanged.
+Skip the search when the request is abstract or the style guide already covers it.
+"""
+
+
+def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
     model = OpenAIServerModel(
         model_id=os.environ["LLM_MODEL"],
         api_base=os.environ["LLM_API_BASE"],
         api_key=os.environ.get("LLM_API_KEY", "not-needed"),
     )
 
+    tools = [SaveTextureTool(os.environ.get("OUTPUT_DIR", "output"))]
+    instructions = INSTRUCTIONS
+    if references is not None:
+        tools.append(FindReferenceTexturesTool(references))
+        instructions += REFERENCE_INSTRUCTIONS
+
     return CodeAgent(
-        tools=[SaveTextureTool(os.environ.get("OUTPUT_DIR", "output"))],
+        tools=tools,
         model=model,
-        instructions=INSTRUCTIONS + "\n\n# Style guide (skill)\n\n" + load_skill_text(),
+        instructions=instructions + "\n\n# Style guide (skill)\n\n" + load_skill_text(),
         additional_authorized_imports=["numpy", "numpy.*", "PIL", "PIL.*", "texture_kit"],
         max_steps=int(os.environ.get("MAX_STEPS", "10")),
         stream_outputs=True,

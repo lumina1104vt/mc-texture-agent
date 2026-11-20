@@ -2,46 +2,28 @@
 
 import os
 
-from smolagents import GradioUI
-
 from .agent import build_agent
+from .reference import ReferenceIndex
+from .ui import TextureGradioUI
 
-# 對話區高度：預設的 400px 太小，改成跟視窗高度連動
-CHAT_HEIGHT = os.environ.get("CHAT_HEIGHT", "75vh")
 
-
-class TextureGradioUI(GradioUI):
-    """和 smolagents 的 GradioUI 相同，只把對話區加高。"""
-
-    def create_app(self):
-        import gradio as gr
-
-        # Gradio 5.x 需要 type="messages"，Gradio 6 已移除這個參數
-        type_messages_kwarg = {"type": "messages"} if gr.__version__.startswith("5") else {}
-
-        chatbot = gr.Chatbot(
-            label="Agent",
-            height=CHAT_HEIGHT,
-            latex_delimiters=[
-                {"left": r"$$", "right": r"$$", "display": True},
-                {"left": r"$", "right": r"$", "display": False},
-                {"left": r"\[", "right": r"\]", "display": True},
-                {"left": r"\(", "right": r"\)", "display": False},
-            ],
-            **type_messages_kwarg,
-        )
-        return gr.ChatInterface(
-            fn=self._stream_response,
-            chatbot=chatbot,
-            title="Minecraft Texture Generation Agent",
-            multimodal=self.file_upload_folder is not None,
-            save_history=True,
-            **type_messages_kwarg,
-        )
+def load_references() -> ReferenceIndex | None:
+    """建立參考材質索引；失敗時只警告，不影響基本功能。"""
+    try:
+        index = ReferenceIndex.from_env()
+        summary = index.sync(progress=print)
+        print(f"[reference] {summary['total']} textures indexed from {summary['sources']} source(s)", flush=True)
+        for err in summary["errors"]:
+            print(f"[reference] skipped: {err}", flush=True)
+        return index
+    except Exception as exc:  # noqa: BLE001
+        print(f"[reference] disabled: {exc}", flush=True)
+        return None
 
 
 def main() -> None:
-    ui = TextureGradioUI(build_agent(), reset_agent_memory=True)
+    references = load_references()
+    ui = TextureGradioUI(build_agent(references), references=references, reset_agent_memory=True)
     ui.launch(
         share=False,
         server_name=os.environ.get("HOST", "0.0.0.0"),
