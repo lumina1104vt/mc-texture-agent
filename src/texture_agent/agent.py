@@ -12,6 +12,10 @@ from .tools import SaveTextureTool
 INSTRUCTIONS = """\
 You create original 16x16 Minecraft textures (blocks and items) in the vanilla art style.
 
+Language: write everything you say to the user, including the text after "Thought:", in Traditional Chinese
+(繁體中文). Keep the response format ("Thought:", the <code> block), all code, variable names, comments and
+file names in English.
+
 How to work:
 1. Decide on a small palette (usually 4-8 colors) and the shapes before writing code.
 2. Draw with the texture_kit helpers described below. Coordinates are (x, y): x is the column
@@ -61,4 +65,5 @@ def build_agent() -> CodeAgent:
         instructions=INSTRUCTIONS + "\n\n# Style guide (skill)\n\n" + load_skill_text(),
         additional_authorized_imports=["numpy", "numpy.*", "PIL", "PIL.*", "texture_kit"],
         max_steps=int(os.environ.get("MAX_STEPS", "10")),
+        stream_outputs=True,
     )

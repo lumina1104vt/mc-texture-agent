@@ -43,6 +43,7 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | `MAX_STEPS` | Agent 最多步數（重試上限） | `10` |
 | `OUTPUT_DIR` | PNG 輸出資料夾 | 容器內 `/app/output` |
 | `PORT` | Web UI 連接埠 | `7860` |
+| `CHAT_HEIGHT` | 對話區高度（CSS 長度，例如 `75vh`、`600px`） | `75vh` |
 
 ## 運作流程
 
