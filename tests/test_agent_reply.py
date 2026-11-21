@@ -193,3 +193,28 @@ def test_eval_case_runner_fails_when_nothing_saved(tmp_path):
     agent = make(tmp_path, ["Thought: 你好"])
     r = run_case(agent, {"id": "T0", "input": "嗨", "expect": "x"}, tmp_path)
     assert r["saved"] == [] and r["auto_pass"] is False
+
+
+def test_model_has_output_cap_and_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("MAX_OUTPUT_TOKENS", "1234")
+    monkeypatch.setenv("LLM_TIMEOUT", "42")
+    agent = build_agent()
+    assert agent.model.kwargs["max_tokens"] == 1234
+    assert agent.model.client.timeout == 42
+    assert agent.model.client.max_retries == 0
+
+
+def test_eval_select_and_merge_for_partial_reruns():
+    import pytest
+
+    from texture_agent.eval_cases import merge_results, select_cases
+
+    cases = [{"id": "T01"}, {"id": "T02"}, {"id": "T03"}]
+    assert [c["id"] for c in select_cases(cases, "T03, T01")] == ["T01", "T03"]
+    assert select_cases(cases, None) == cases
+    with pytest.raises(SystemExit):
+        select_cases(cases, "T99")
+    old = [{"id": "T01", "steps": 2}, {"id": "T02", "steps": 9}]
+    merged = merge_results(old, [{"id": "T02", "steps": 3}, {"id": "T03", "steps": 1}], ["T01", "T02", "T03"])
+    assert [(r["id"], r["steps"]) for r in merged] == [("T01", 2), ("T02", 3), ("T03", 1)]

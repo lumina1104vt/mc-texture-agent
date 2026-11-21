@@ -73,6 +73,24 @@ def run_case(agent, case: dict, output_dir: str | Path) -> dict:
     }
 
 
+def select_cases(cases: list[dict], only: str | None) -> list[dict]:
+    """--only T09,T10：只挑指定的案例；沒指定就全部。"""
+    if not only:
+        return cases
+    wanted = {x.strip() for x in only.split(",") if x.strip()}
+    unknown = wanted - {c["id"] for c in cases}
+    if unknown:
+        raise SystemExit(f"找不到案例：{', '.join(sorted(unknown))}")
+    return [c for c in cases if c["id"] in wanted]
+
+
+def merge_results(old: list[dict], new: list[dict], order: list[str]) -> list[dict]:
+    """把新跑的結果併進舊結果（同 ID 以新的為準），依案例順序排列，方便只補跑部分案例。"""
+    by_id = {r["id"]: r for r in old}
+    by_id.update({r["id"]: r for r in new})
+    return [by_id[i] for i in order if i in by_id]
+
+
 def to_markdown(results: list[dict]) -> str:
     lines = [
         "| ID | 輸入 | 預期 | 步數 | 失敗步數 | 秒 | 存檔 | 自動檢查 | 人工評分 |",
@@ -97,22 +115,32 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--cases", default="documents/test-cases.json")
     parser.add_argument("--out", default="documents/eval-results.md")
     parser.add_argument("--workdir", default="output/eval")
+    parser.add_argument("--only", help="只跑指定案例，例如 T09,T10；結果會併進既有的結果檔")
     args = parser.parse_args(argv)
 
     from .agent import build_agent  # 延後匯入：需要 LLM_MODEL / LLM_API_BASE
 
-    results = []
-    for case in load_cases(args.cases):
+    all_cases = load_cases(args.cases)
+    order = [c["id"] for c in all_cases]
+    out_md = Path(args.out)
+    out_json = out_md.with_suffix(".json")
+    results: list[dict] = []
+    if args.only and out_json.exists():
+        results = json.loads(out_json.read_text(encoding="utf-8"))
+
+    for case in select_cases(all_cases, args.only):
         out = Path(args.workdir) / case["id"]
         os.environ["OUTPUT_DIR"] = str(out)
         agent = build_agent()
+        agent.stream_outputs = False  # 非串流時請求逾時才是整體時限；串流時只有 max_tokens 能擋住失控生成
         print(f"[{case['id']}] {case['input']} …", flush=True)
         result = run_case(agent, case, out)
-        print(f"    {result['steps']} 步、{result['errors']} 步失敗、{result['seconds']} 秒、{'Pass' if result['auto_pass'] else 'Fail'}", flush=True)
-        results.append(result)
-
-    Path(args.out).write_text(to_markdown(results), encoding="utf-8")
-    Path(args.out).with_suffix(".json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"    {result['steps']} 步、{result['errors']} 步失敗、{result['seconds']} 秒、{'Pass' if result['auto_pass'] else 'Fail'}"
+              + (f"、當機：{result['crashed']}" if result["crashed"] else ""), flush=True)
+        results = merge_results(results, [result], order)
+        # 每跑完一個案例就寫檔，中途中斷也不會丟掉已跑完的結果
+        out_md.write_text(to_markdown(results), encoding="utf-8")
+        out_json.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"已寫入 {args.out}")
 
 

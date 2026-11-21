@@ -44,6 +44,8 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | `LLM_API_KEY` | API key | `not-needed` |
 | `MAX_STEPS` | Agent 最多步數（重試上限） | `16` |
 | `REVIEW_ROUNDS` | 畫完後最多回頭看幾次，`0` 關閉 | `2` |
+| `MAX_OUTPUT_TOKENS` | 模型單次輸出上限（擋住無限重複輸出） | `8192` |
+| `LLM_TIMEOUT` | 單次模型請求逾時（秒，不自動重試） | `600` |
 | `OUTPUT_DIR` | PNG 輸出資料夾 | 容器內 `/app/output` |
 | `PORT` | Web UI 連接埠 | `7860` |
 | `REFERENCE_DIR` | 參考材質來源資料夾（jar / zip / 解壓後的資源包） | 容器內 `/app/reference` |

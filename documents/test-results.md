@@ -2,12 +2,12 @@
 
 ## A. 單元測試（假模型，不需要 LLM server）
 
-指令：`python -m pytest tests`。最近一次結果：**62 passed**。
+指令：`python -m pytest tests`。最近一次結果：**64 passed**。
 
 | 檔案 | 數量 | 測試內容 |
 | --- | --- | --- |
 | `test_texture_kit.py` | 15 | 繪圖函式（座標、溢位、ASCII 錯誤訊息、`speckle`、`gem_cluster`） |
-| `test_agent_reply.py` | 12 | Agent 流程：純文字回覆、程式碼執行、重試、記憶、修改與匯出、回頭看、無 import 呼叫、自訂系統提示詞、案例執行器 |
+| `test_agent_reply.py` | 14 | Agent 流程：純文字回覆、程式碼執行、重試、記憶、修改與匯出、回頭看、無 import 呼叫、自訂系統提示詞、案例執行器（含 `--only` 補跑與結果合併）、輸出上限與逾時 |
 | `test_reference.py` / `test_reference_tool.py` | 12 / 4 | 參考材質索引、同步、檢索、Tool |
 | `test_pack_features.py` | 9 | 版本存檔、品質檢查、主題記憶、資源包匯出 |
 | `test_skill.py` | 4 | skill 載入與內容 |
@@ -35,4 +35,11 @@ Tool 改版前的同一案例（run1）：9 步、1,040 秒、5 步失敗，最�
 
 ### 尚待實測
 
-T02–T10 還沒有跑，結果不在本文件中。跑完 `eval_cases` 後，把 `eval-results.md` 的表貼進這裡，並對每張圖填人工評分。
+T02–T10 的統計還沒有記錄在本文件中。第一次批次測試跑到 T09 時，模型失控生成（見 `failure-cases.md` 失敗 5）而中斷，T01–T08 的步數與耗時因結果未即時寫檔而遺失，只留下圖。程式修正後請重跑：
+
+```bash
+python -m texture_agent.eval_cases              # 全部重跑
+python -m texture_agent.eval_cases --only T09,T10   # 只補跑指定案例，結果會併進既有結果檔
+```
+
+跑完把 `eval-results.md` 的表貼進這裡，並對每張圖填人工評分。

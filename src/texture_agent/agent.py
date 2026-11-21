@@ -194,6 +194,9 @@ def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
         model_id=os.environ["LLM_MODEL"],
         api_base=os.environ["LLM_API_BASE"],
         api_key=os.environ.get("LLM_API_KEY", "not-needed"),
+        # 小模型偶爾會陷入無限重複輸出；單次輸出上限與請求逾時是最後一道防線
+        max_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "8192")),
+        client_kwargs={"timeout": float(os.environ.get("LLM_TIMEOUT", "600")), "max_retries": 0},
     )
 
     output_dir = os.environ.get("OUTPUT_DIR", "output")
