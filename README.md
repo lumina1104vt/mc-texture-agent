@@ -124,4 +124,5 @@ Agent 生成的程式碼可以 `from texture_kit import ...`，用現成的函�
 
 - 單元測試：`python -m pytest tests`（含 Agent 流程的假模型測試）。
 - 批次實測：`python -m texture_agent.eval_cases` 依 `documents/test-cases.json` 的 10 個案例跑真模型，結果寫入 `documents/eval-results.md`。
-- 真模型實測：同一個需求「紅寶石礦石」，Tool 改版前 9 步、約 17 分鐘、5 步失敗；改版後 2 步、約 73 秒、零錯誤。細節見 [失敗情境](documents/failure-cases.md) 與 [執行追蹤](documents/execution-trace.md)。
+- 真模型實測（10 個案例，`documents/test-results.md`）：自動檢查通過 9/10（只代表有存檔），人工評分 0/10 及格；三種礦石勉強能看，其他完全看不出來。瓶頸是 9B 模型的能力，不只是提示詞或 Tool。
+- Tool 改版前後（單一案例「紅寶石礦石」）：改版前 9 步、約 17 分鐘、5 步失敗；改版後 2 步、約 73 秒、零錯誤。細節見 [失敗情境](documents/failure-cases.md) 與 [執行追蹤](documents/execution-trace.md)。
