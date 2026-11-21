@@ -169,3 +169,27 @@ def test_own_system_prompt_replaces_the_default_template(tmp_path):
     assert "{{" not in sp and "{%" not in sp  # 樣板變數都已經代入
     assert len(sp) < 22000  # 原本約 3.3 萬字元
     assert "numpy" in sp  # authorized_imports 有代入
+
+
+def test_eval_case_runner_records_steps_errors_and_saved_files(tmp_path):
+    from texture_agent.eval_cases import run_case, to_markdown
+
+    bad = "Thought: 先試錯\n<code>\nundefined_name + 1\n</code>"
+    good = (
+        "Thought: 畫\n<code>\nimg = new_canvas((125, 125, 125))\nspeckle(img, 0.2, 10, 1)\n"
+        "gem_cluster(img, 6, 6, 5, (200, 30, 60), seed=1)\nfinal_answer(save_texture(image=img, name='ore', kind='block'))\n</code>"
+    )
+    agent = make(tmp_path, [bad, good])
+    case = {"id": "T00", "input": "礦石", "kind": "block", "opaque": True, "expect": "x"}
+    r = run_case(agent, case, tmp_path)
+    assert r["steps"] == 2 and r["errors"] == 1
+    assert r["saved"] == ["ore.png"] and r["auto_pass"] is True
+    assert "T00" in to_markdown([r]) and "Pass" in to_markdown([r])
+
+
+def test_eval_case_runner_fails_when_nothing_saved(tmp_path):
+    from texture_agent.eval_cases import run_case
+
+    agent = make(tmp_path, ["Thought: 你好"])
+    r = run_case(agent, {"id": "T0", "input": "嗨", "expect": "x"}, tmp_path)
+    assert r["saved"] == [] and r["auto_pass"] is False

@@ -1,0 +1,12 @@
+[
+  {"id": "T01", "input": "紅寶石礦石", "kind": "block", "opaque": true, "expect": "灰色石頭底鋪滿整張，上面有數簇紅色寶石，有明暗"},
+  {"id": "T02", "input": "煤礦石", "kind": "block", "opaque": true, "expect": "灰色石頭底，數簇深黑色煤塊，不能整張黑"},
+  {"id": "T03", "input": "銅礦石", "kind": "block", "opaque": true, "expect": "灰色石頭底，數簇橘褐色銅點"},
+  {"id": "T04", "input": "泥土方塊", "kind": "block", "opaque": true, "expect": "單一棕色相，深淺顆粒，整張不透明"},
+  {"id": "T05", "input": "橡木木板", "kind": "block", "opaque": true, "expect": "淺棕色橫向木紋，板與板之間有較暗的縫"},
+  {"id": "T06", "input": "玻璃", "kind": "block", "opaque": false, "expect": "中間透明，邊框與少量高光不透明"},
+  {"id": "T07", "input": "鐵劍", "kind": "item", "opaque": false, "expect": "沿對角線的劍，劍身淺灰、握柄棕色，四周留透明"},
+  {"id": "T08", "input": "紅色藥水瓶", "kind": "item", "opaque": false, "expect": "直立玻璃瓶，下半有紅色液體，瓶口有軟木塞"},
+  {"id": "T09", "input": "金屬齒輪", "kind": "item", "opaque": false, "expect": "正面的圓形齒輪，外緣有齒，中間有孔"},
+  {"id": "T10", "input": "發電機（機器方塊）", "kind": "block", "opaque": true, "expect": "金屬外殼的機器面，有散熱孔或指示燈等功能零件"}
+]
