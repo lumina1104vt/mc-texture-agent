@@ -183,8 +183,60 @@ def bevel(img: np.ndarray, light: int = 25, dark: int = 25) -> np.ndarray:
     return img
 
 
+def speckle(img: np.ndarray, density: float = 0.2, strength: int = 10, seed: int = 0) -> np.ndarray:
+    """在不透明的像素上隨機撒深淺點（顆粒感）。
+
+    density：被改動的像素比例（0-1）；strength：明暗改動的幅度；seed：相同的 seed 得到相同結果。
+    透明的像素不會被改動。不需要自己 import random。
+    """
+    if not 0 <= density <= 1:
+        raise ValueError(f"density must be between 0 and 1, got {density}")
+    rng = np.random.default_rng(int(seed))
+    work = img.astype(np.int32)
+    solid = work[:, :, 3] > 0
+    pick = solid & (rng.random(solid.shape) < density)
+    delta = rng.choice([-2, -1, 1, 2], size=solid.shape) * max(1, abs(int(strength)) // 2)
+    work[pick, :3] = np.clip(work[pick, :3] + delta[pick][:, None], 0, 255)
+    img[:] = work.astype(np.uint8)
+    return img
+
+
+def gem_cluster(img: np.ndarray, x: int, y: int, size: int, color, seed: int = 0) -> np.ndarray:
+    """在 (x, y) 附近畫一簇礦物 / 寶石，自動做出暗邊、本體、亮面和一格高光。
+
+    size：這一簇有幾格（2-12，建議 3-6）；color：本體顏色；seed：不同的 seed 得到不同的形狀。
+    形狀是相連的不規則塊，會留在畫布內側（距邊緣至少 1 格），不必自己數字元。
+    """
+    size = int(size)
+    if not 2 <= size <= 12:
+        raise ValueError(f"size must be between 2 and 12 pixels, got {size}")
+    rng = np.random.default_rng(int(seed))
+    cx, cy = max(1, min(SIZE - 2, int(x))), max(1, min(SIZE - 2, int(y)))
+    cells = [(cx, cy)]
+    while len(cells) < size:
+        bx, by = cells[int(rng.integers(len(cells)))]
+        dx, dy = [(1, 0), (-1, 0), (0, 1), (0, -1)][int(rng.integers(4))]
+        nx, ny = bx + dx, by + dy
+        if 1 <= nx <= SIZE - 2 and 1 <= ny <= SIZE - 2 and (nx, ny) not in cells:
+            cells.append((nx, ny))
+    # 光從左上來：越靠左上越亮，越靠右下越暗
+    score = {c: (c[0] - cx) + (c[1] - cy) for c in cells}
+    lo, hi = min(score.values()), max(score.values())
+    for c in cells:
+        if score[c] == lo:
+            tone = 28
+        elif score[c] == hi and hi > lo:
+            tone = -40
+        else:
+            tone = 0
+        set_pixel(img, c[0], c[1], shade(color, tone))
+    top_left = min(cells, key=lambda c: (score[c], c[1], c[0]))
+    set_pixel(img, top_left[0], top_left[1], shade(color, 55))
+    return img
+
+
 # 提供給 Agent 直接使用（不必 import）的函式
 EXPORTED = {
     f.__name__: f
-    for f in (new_canvas, shade, set_pixel, fill_rect, draw_line, stamp_ascii, from_ascii, mirror_x, outline, bevel)
+    for f in (new_canvas, shade, set_pixel, fill_rect, draw_line, stamp_ascii, from_ascii, mirror_x, outline, bevel, speckle, gem_cluster)
 }

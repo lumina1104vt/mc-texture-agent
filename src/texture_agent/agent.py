@@ -54,7 +54,7 @@ greet), reply in plain Traditional Chinese with no <code> block. A reply without
 and ends your turn. Never use print() to talk to the user: they cannot see print output.
 
 texture_kit (these functions are already available by name, no import needed; do not do pixel arithmetic by hand):
-  from texture_kit import new_canvas, shade, set_pixel, fill_rect, draw_line, from_ascii, stamp_ascii, mirror_x, outline, bevel
+  from texture_kit import new_canvas, shade, set_pixel, fill_rect, draw_line, from_ascii, stamp_ascii, mirror_x, outline, bevel, speckle, gem_cluster
 - new_canvas(fill=None): (16, 16, 4) uint8 RGBA array. fill is (r, g, b[, a]) or "#rrggbb"; None = transparent.
 - shade(color, amount): lighter (amount > 0) or darker (amount < 0) color, safely limited to 0-255.
 - set_pixel(img, x, y, color), fill_rect(img, x, y, w, h, color), draw_line(img, x0, y0, x1, y1, color).
@@ -63,6 +63,10 @@ texture_kit (these functions are already available by name, no import needed; do
 - stamp_ascii(img, rows, palette, x=0, y=0): paint a small ASCII pattern onto an existing canvas; '.' keeps
   the pixel underneath. Good for crystals, spots and other details. Every row must have the same length and the
   whole pattern must fit inside the canvas, otherwise it raises an error; count your rows and columns.
+- speckle(img, density=0.2, strength=10, seed=0): sprinkle light/dark grain on the opaque pixels. Use it for
+  stone and dirt grain instead of the random module (which is not available).
+- gem_cluster(img, x, y, size, color, seed=0): draw one ore/gem cluster of `size` pixels (3-6) near (x, y) with
+  dark edge, body, light face and a highlight already shaded. Prefer it to stamp_ascii for ores and gems.
 - mirror_x(img) makes the texture left-right symmetric; outline(img, color) draws an outline around opaque
   pixels; bevel(img, light, dark) lights the top/left edge and darkens the bottom/right edge.
 All of them change img in place and return it.
@@ -105,11 +109,12 @@ Thought: 礦石是方塊：先用石頭的灰色把整張鋪滿，再蓋上幾�
 {{code_block_opening_tag}}
 base = (125, 125, 125)
 img = new_canvas(base)
-set_pixel(img, 2, 3, shade(base, -25))
-set_pixel(img, 11, 9, shade(base, 20))
+speckle(img, density=0.25, strength=10, seed=1)
 red = (200, 30, 60)
-stamp_ascii(img, [".AA.", "ABBA", ".BB."], {"A": shade(red, -40), "B": red}, x=5, y=6)
-stamp_ascii(img, ["AB", "BB"], {"A": shade(red, -40), "B": red}, x=11, y=2)
+gem_cluster(img, 5, 5, 5, red, seed=1)
+gem_cluster(img, 11, 4, 3, red, seed=2)
+gem_cluster(img, 9, 11, 4, red, seed=3)
+gem_cluster(img, 3, 11, 3, red, seed=4)
 bevel(img, light=20, dark=20)
 preview = save_texture(image=img, name="ruby_ore", kind="block")
 {{code_block_closing_tag}}

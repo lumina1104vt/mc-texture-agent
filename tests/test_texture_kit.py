@@ -131,4 +131,42 @@ def test_ragged_rows_error_includes_padded_rows():
 
 
 def test_exported_functions_cover_the_api():
-    assert set(k.EXPORTED) == {"new_canvas", "shade", "set_pixel", "fill_rect", "draw_line", "stamp_ascii", "from_ascii", "mirror_x", "outline", "bevel"}
+    assert set(k.EXPORTED) == {"new_canvas", "shade", "set_pixel", "fill_rect", "draw_line", "stamp_ascii", "from_ascii", "mirror_x", "outline", "bevel", "speckle", "gem_cluster"}
+
+
+def test_speckle_only_touches_opaque_pixels_and_is_deterministic():
+    import texture_kit as tk
+
+    a = tk.new_canvas((120, 120, 120))
+    tk.fill_rect(a, 0, 0, 4, 4, (0, 0, 0, 0))
+    b = a.copy()
+    tk.speckle(a, density=0.5, strength=10, seed=3)
+    tk.speckle(b, density=0.5, strength=10, seed=3)
+    assert (a == b).all()
+    assert (a[:4, :4] == 0).all()  # 透明區沒變
+    assert (a[4:, 4:, :3] != 120).any()
+    c = tk.new_canvas((120, 120, 120))
+    tk.speckle(c, density=0.0)
+    assert (c[:, :, :3] == 120).all()
+    with pytest.raises(ValueError):
+        tk.speckle(c, density=2)
+
+
+def test_gem_cluster_has_requested_size_inside_canvas_and_is_shaded():
+    import texture_kit as tk
+
+    base = (125, 125, 125)
+    for seed in range(20):
+        img = tk.new_canvas(base)
+        tk.gem_cluster(img, 8, 8, 5, (200, 30, 60), seed=seed)
+        changed = (img[:, :, :3] != base).any(axis=2)
+        assert changed.sum() == 5
+        ys, xs = changed.nonzero()
+        assert xs.min() >= 1 and xs.max() <= 14 and ys.min() >= 1 and ys.max() <= 14
+        assert len({tuple(p) for p in img[changed][:, :3]}) >= 3
+    img = tk.new_canvas(base)
+    tk.gem_cluster(img, 0, 15, 4, (200, 30, 60), seed=1)  # 座標太靠邊會被拉進來
+    assert (img[0] == tk.new_canvas(base)[0]).all()
+    with pytest.raises(ValueError):
+        tk.gem_cluster(img, 8, 8, 1, (200, 30, 60))
+    assert "gem_cluster" in tk.EXPORTED and "speckle" in tk.EXPORTED
