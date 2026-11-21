@@ -117,3 +117,18 @@ def test_stamp_ascii_rejects_ragged_empty_and_oversize():
         k.stamp_ascii(k.new_canvas(), ["A"] * 17, pal)
     with pytest.raises(ValueError, match="does not fit"):
         k.stamp_ascii(k.new_canvas(), ["A"], pal, x=-1)
+
+
+def test_ragged_rows_error_includes_padded_rows():
+    with pytest.raises(ValueError) as e:
+        k.stamp_ascii(k.new_canvas(), [".RR", "R", ".R."], {"R": (1, 2, 3)})
+    msg = str(e.value)
+    assert "'R..'" in msg and "padded" in msg  # 補齊後的版本可以直接複製
+    with pytest.raises(ValueError, match="shorten"):
+        k.stamp_ascii(k.new_canvas(), ["A" * 20, "A"], {"A": (1, 2, 3)})
+    with pytest.raises(ValueError, match="padded"):
+        k.from_ascii(["A"] * 15 + ["AAAA"], {"A": (1, 2, 3)})
+
+
+def test_exported_functions_cover_the_api():
+    assert set(k.EXPORTED) == {"new_canvas", "shade", "set_pixel", "fill_rect", "draw_line", "stamp_ascii", "from_ascii", "mirror_x", "outline", "bevel"}

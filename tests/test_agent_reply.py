@@ -139,3 +139,17 @@ def test_review_can_be_disabled(tmp_path):
     finally:
         os.environ.pop("REVIEW_ROUNDS")
     assert agent.review is None
+
+
+def test_kit_functions_work_without_import(tmp_path):
+    code = """<code>
+img = new_canvas((120, 120, 120))
+fill_rect(img, 2, 2, 5, 5, (200, 30, 60))
+set_pixel(img, 9, 9, shade((200, 30, 60), -40))
+draw_line(img, 0, 15, 15, 15, (90, 90, 90))
+preview = save_texture(image=img, name="noimport", kind="block")
+final_answer(preview)
+</code>"""
+    agent = make(tmp_path, [code])
+    agent.run("x", reset=True)
+    assert (tmp_path / "noimport.png").exists()

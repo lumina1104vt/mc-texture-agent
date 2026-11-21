@@ -94,6 +94,15 @@ def draw_line(img: np.ndarray, x0: int, y0: int, x1: int, y1: int, color) -> np.
     return img
 
 
+def _padded_hint(rows: list[str]) -> str:
+    """列長不一致時，附上「右邊用 '.' 補齊」的版本，模型可以直接複製，不必自己數字元。"""
+    width = max(len(r) for r in rows)
+    if width > SIZE:
+        return f" The longest row has {width} characters, more than the {SIZE} the canvas allows: shorten it."
+    padded = ",\n".join(f"    {r.ljust(width, '.')!r}" for r in rows)
+    return f" If each row should start at the left edge, use these rows padded with '.' to {width} characters:\nrows = [\n{padded},\n]"
+
+
 def stamp_ascii(img: np.ndarray, rows: list[str], palette: dict, x: int = 0, y: int = 0) -> np.ndarray:
     """把用文字畫的圖案蓋到畫布上，左上角放在 (x, y)。
 
@@ -106,7 +115,7 @@ def stamp_ascii(img: np.ndarray, rows: list[str], palette: dict, x: int = 0, y: 
     widths = {len(r) for r in rows}
     if len(widths) != 1:
         detail = ", ".join(f"row {j} has {len(r)}" for j, r in enumerate(rows))
-        raise ValueError(f"All rows must have the same length, got different lengths ({detail}).")
+        raise ValueError(f"All rows must have the same length, got different lengths ({detail})." + _padded_hint(rows))
     width, height = widths.pop(), len(rows)
     if x < 0 or y < 0 or x + width > SIZE or y + height > SIZE:
         raise ValueError(
@@ -127,10 +136,10 @@ def stamp_ascii(img: np.ndarray, rows: list[str], palette: dict, x: int = 0, y: 
 def from_ascii(rows: list[str], palette: dict) -> np.ndarray:
     """用 16 列、每列 16 個字元的文字畫整張材質。'.' 是透明，其他字元查 palette。"""
     if len(rows) != SIZE:
-        raise ValueError(f"Need exactly {SIZE} rows, got {len(rows)}.")
+        raise ValueError(f"Need exactly {SIZE} rows, got {len(rows)}: add or remove rows so there are {SIZE}.")
     for j, row in enumerate(rows):
         if len(row) != SIZE:
-            raise ValueError(f"Row {j} must have {SIZE} characters, got {len(row)}.")
+            raise ValueError(f"Row {j} must have {SIZE} characters, got {len(row)}." + _padded_hint(rows))
     return stamp_ascii(new_canvas(), rows, palette)
 
 
@@ -172,3 +181,10 @@ def bevel(img: np.ndarray, light: int = 25, dark: int = 25) -> np.ndarray:
     adjust(light_mask & ~dark_mask, abs(int(light)))
     img[:] = work.astype(np.uint8)
     return img
+
+
+# 提供給 Agent 直接使用（不必 import）的函式
+EXPORTED = {
+    f.__name__: f
+    for f in (new_canvas, shade, set_pixel, fill_rect, draw_line, stamp_ascii, from_ascii, mirror_x, outline, bevel)
+}

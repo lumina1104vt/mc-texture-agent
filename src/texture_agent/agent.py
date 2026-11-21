@@ -9,6 +9,8 @@ from smolagents import CodeAgent, OpenAIServerModel
 from smolagents.agents import ActionOutput
 from smolagents.utils import AgentParsingError
 
+from texture_kit import EXPORTED as KIT_FUNCTIONS
+
 from .extra_tools import ExportPackTool, GetThemeTool, SaveThemeTool
 from .reference import ReferenceIndex
 from .reference_tool import FindReferenceTexturesTool
@@ -48,7 +50,7 @@ Talking to the user: when you only need to speak (answer a question, ask for det
 greet), reply in plain Traditional Chinese with no <code> block. A reply without code is shown to the user
 and ends your turn. Never use print() to talk to the user: they cannot see print output.
 
-texture_kit (import it; do not do pixel arithmetic by hand):
+texture_kit (these functions are already available by name, no import needed; do not do pixel arithmetic by hand):
   from texture_kit import new_canvas, shade, set_pixel, fill_rect, draw_line, from_ascii, stamp_ascii, mirror_x, outline, bevel
 - new_canvas(fill=None): (16, 16, 4) uint8 RGBA array. fill is (r, g, b[, a]) or "#rrggbb"; None = transparent.
 - shade(color, amount): lighter (amount > 0) or darker (amount < 0) color, safely limited to 0-255.
@@ -156,4 +158,5 @@ def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
         final_answer_checks=[review.check_final] if review else None,
     )
     agent.review = review
+    agent.state.update(KIT_FUNCTIONS)  # texture_kit 的函式不必 import 就能用
     return agent
