@@ -12,6 +12,7 @@ from smolagents.utils import AgentParsingError
 from .extra_tools import ExportPackTool, GetThemeTool, SaveThemeTool
 from .reference import ReferenceIndex
 from .reference_tool import FindReferenceTexturesTool
+from .review import ReviewLoop
 from .skill import load_skill_text
 from .theme_memory import ThemeStore
 from .tools import SaveTextureTool
@@ -55,7 +56,8 @@ texture_kit (import it; do not do pixel arithmetic by hand):
 - from_ascii(rows, palette): draw the whole texture as 16 strings of 16 characters. '.' is transparent,
   any other character is looked up in palette (a dict of character -> color).
 - stamp_ascii(img, rows, palette, x=0, y=0): paint a small ASCII pattern onto an existing canvas; '.' keeps
-  the pixel underneath. Good for crystals, spots and other details.
+  the pixel underneath. Good for crystals, spots and other details. Every row must have the same length and the
+  whole pattern must fit inside the canvas, otherwise it raises an error; count your rows and columns.
 - mirror_x(img) makes the texture left-right symmetric; outline(img, color) draws an outline around opaque
   pixels; bevel(img, light, dark) lights the top/left edge and darkens the bottom/right edge.
 All of them change img in place and return it.
@@ -70,6 +72,15 @@ Example (a gem on a stone background):
   stamp_ascii(img, [".AA.", "ABBA", "ABBA", ".AA."], {"A": shade((200, 30, 60), -40), "B": (200, 30, 60)}, x=5, y=6)
   bevel(img, light=20, dark=20)
   preview = save_texture(image=img, name="example", kind="block")
+"""
+
+REVIEW_INSTRUCTIONS = """\
+
+Looking back at your work: do not call final_answer in the same code block as save_texture. After a successful
+save you are shown the saved texture as an image. Look at it and compare it with the request (subject,
+silhouette, every area painted as intended, clean colors). If it clearly misses, find the cause, redraw and save
+again with the same name; if it is good, call final_answer(preview). You can look back at most {n} times per
+request.
 """
 
 REFERENCE_INSTRUCTIONS = """\
@@ -87,6 +98,13 @@ class TextureCodeAgent(CodeAgent):
 
     smolagents 預設把「沒有 code block」視為格式錯誤並要求重試，模型想單純說話時就會一直卡在重試。
     """
+
+    review: ReviewLoop | None = None
+
+    def run(self, task, *args, **kwargs):
+        if self.review is not None:
+            self.review.reset()  # 每個新請求重新計算可回頭看的次數
+        return super().run(task, *args, **kwargs)
 
     def _step_stream(self, memory_step):
         open_tag, close_tag = self.code_block_tags
@@ -116,17 +134,26 @@ def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
 
     output_dir = os.environ.get("OUTPUT_DIR", "output")
     themes = ThemeStore(Path(os.environ.get("DATA_DIR", "data")) / "themes")
-    tools = [SaveTextureTool(output_dir), GetThemeTool(themes), SaveThemeTool(themes), ExportPackTool(output_dir)]
+    save_tool = SaveTextureTool(output_dir)
+    tools = [save_tool, GetThemeTool(themes), SaveThemeTool(themes), ExportPackTool(output_dir)]
+    max_reviews = int(os.environ.get("REVIEW_ROUNDS", "2"))
+    review = ReviewLoop(save_tool, max_reviews) if max_reviews > 0 else None
     instructions = INSTRUCTIONS
     if references is not None:
         tools.append(FindReferenceTexturesTool(references))
         instructions += REFERENCE_INSTRUCTIONS
+    if review is not None:
+        instructions += REVIEW_INSTRUCTIONS.format(n=max_reviews)
 
-    return TextureCodeAgent(
+    agent = TextureCodeAgent(
         tools=tools,
         model=model,
         instructions=instructions + "\n\n# Style guide (skill)\n\n" + load_skill_text(),
         additional_authorized_imports=["numpy", "numpy.*", "PIL", "PIL.*", "texture_kit"],
-        max_steps=int(os.environ.get("MAX_STEPS", "10")),
+        max_steps=int(os.environ.get("MAX_STEPS", "16")),
         stream_outputs=True,
+        step_callbacks=[review.on_step] if review else None,
+        final_answer_checks=[review.check_final] if review else None,
     )
+    agent.review = review
+    return agent

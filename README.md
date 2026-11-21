@@ -40,7 +40,8 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | `LLM_API_BASE` | LLM server 位址，結尾 `/v1` | 必填 |
 | `LLM_MODEL` | 模型名稱 | 必填 |
 | `LLM_API_KEY` | API key | `not-needed` |
-| `MAX_STEPS` | Agent 最多步數（重試上限） | `10` |
+| `MAX_STEPS` | Agent 最多步數（重試上限） | `16` |
+| `REVIEW_ROUNDS` | 畫完後最多回頭看幾次，`0` 關閉 | `2` |
 | `OUTPUT_DIR` | PNG 輸出資料夾 | 容器內 `/app/output` |
 | `PORT` | Web UI 連接埠 | `7860` |
 | `REFERENCE_DIR` | 參考材質來源資料夾（jar / zip / 解壓後的資源包） | 容器內 `/app/reference` |
@@ -108,3 +109,5 @@ Agent 生成的程式碼可以 `from texture_kit import ...`，用現成的函�
 - **品質檢查**（`save_texture` 內建，不通過就不存檔，原因回給 Agent 重畫）：幾乎全透明、顏色超過 48 種、顏色散亂像雜訊。指標改寫自 skill 的 `mc_style_audit.py`。
 - **主題記憶**：`get_theme` / `save_theme` 把色票與風格備註存成 JSON（`DATA_DIR/themes/`），之後的材質可沿用。
 - **匯出資源包**：說「匯出」，Agent 呼叫 `export_resource_pack(mod_id)`，把每個名稱的最新版本整理成 `assets/<mod_id>/textures/block|item/` 加上 models、blockstates 與 `pack.mcmeta`（pack_format 34，Minecraft 1.21.1），輸出 `output/<mod_id>_resourcepack.zip`。
+- **畫完回頭看**：`save_texture` 成功後，Agent 會看到剛存的成品圖（需要支援圖片輸入的模型），對照你的需求檢查主題、輪廓、有沒有整片黑色或空白；明顯不對就重畫並存成新版本，最多 `REVIEW_ROUNDS` 次。存檔後如果它想在看圖之前就結束，會被擋下來要它先看。
+- **`stamp_ascii` 會報錯**：每列長度不一致或圖案超出 16×16 時丟出錯誤，不再默默裁掉。

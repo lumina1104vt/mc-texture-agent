@@ -65,8 +65,10 @@ def test_from_ascii_and_stamp():
     with pytest.raises(ValueError, match="palette"):
         k.stamp_ascii(k.new_canvas(), ["Z"], {"A": (1, 1, 1)})
     base = k.new_canvas("#101010")
-    k.stamp_ascii(base, ["AA", "A."], {"A": (200, 0, 0)}, x=15, y=15)  # 超出的部分被裁掉
-    assert (base[15, 15] == [200, 0, 0, 255]).all()
+    with pytest.raises(ValueError, match="does not fit"):
+        k.stamp_ascii(base, ["AA", "A."], {"A": (200, 0, 0)}, x=15, y=15)  # 超出畫布：報錯，不再默默裁掉
+    k.stamp_ascii(base, ["AA", "A."], {"A": (200, 0, 0)}, x=14, y=14)  # 剛好放得進去
+    assert (base[14, 14] == [200, 0, 0, 255]).all() and (base[15, 15] == [16, 16, 16, 255]).all()
 
 
 def test_mirror_x():
@@ -101,3 +103,17 @@ def test_bevel_light_top_left_dark_bottom_right_no_wrap():
     clear = k.new_canvas()
     k.bevel(clear)
     assert clear.max() == 0  # 透明像素不受影響
+
+
+def test_stamp_ascii_rejects_ragged_empty_and_oversize():
+    pal = {"A": (1, 2, 3)}
+    with pytest.raises(ValueError, match="same length"):
+        k.stamp_ascii(k.new_canvas(), ["AA", "A"], pal)
+    with pytest.raises(ValueError, match="empty"):
+        k.stamp_ascii(k.new_canvas(), [], pal)
+    with pytest.raises(ValueError, match="does not fit"):
+        k.stamp_ascii(k.new_canvas(), ["A" * 17], pal)  # 17 字元的列以前會被默默裁掉
+    with pytest.raises(ValueError, match="does not fit"):
+        k.stamp_ascii(k.new_canvas(), ["A"] * 17, pal)
+    with pytest.raises(ValueError, match="does not fit"):
+        k.stamp_ascii(k.new_canvas(), ["A"], pal, x=-1)

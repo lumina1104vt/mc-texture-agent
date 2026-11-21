@@ -24,7 +24,11 @@ class ScriptedModel(Model):
 
 def make(tmp_path, replies):
     os.environ["OUTPUT_DIR"] = str(tmp_path)
-    agent = build_agent()
+    os.environ["REVIEW_ROUNDS"] = "0"  # 這些測試不測回頭看，關掉才能在同一段程式碼存檔並結束
+    try:
+        agent = build_agent()
+    finally:
+        os.environ.pop("REVIEW_ROUNDS")
     agent.model = ScriptedModel(replies)
     agent.stream_outputs = False
     return agent
@@ -78,3 +82,60 @@ def test_edit_then_export_end_to_end(tmp_path):
     assert (tmp_path / "demo_stone.png").exists() and (tmp_path / "demo_stone_v2.png").exists()
     assert "demo_stone_v2.png" in str(result) and (tmp_path / "demo_resourcepack.zip").exists()
     assert {"get_theme", "save_theme", "export_resource_pack", "save_texture"} <= set(agent.tools)
+
+
+class RecordingModel(ScriptedModel):
+    def __init__(self, replies):
+        super().__init__(replies)
+        self.seen = []
+
+    def generate(self, messages, stop_sequences=None, **kwargs):
+        self.seen.append(messages)
+        return super().generate(messages, stop_sequences, **kwargs)
+
+
+def _has_image(messages):
+    return any(isinstance(m.content, list) and any(c.get("type") == "image" for c in m.content if isinstance(c, dict)) for m in messages)
+
+
+def test_review_loop_shows_saved_image_and_blocks_early_finish(tmp_path):
+    os.environ["DATA_DIR"] = str(tmp_path / "data")
+    os.environ["OUTPUT_DIR"] = str(tmp_path)
+    agent = build_agent()
+    save_and_finish = CODE_STONE.format(name="review_stone")  # 存檔 + 同一段程式碼就 final_answer：應該被擋下
+    fixed = CODE_STONE.format(name="review_stone").replace("final_answer(preview)", "pass")
+    agent.model = RecordingModel([save_and_finish, "<code>\nfinal_answer(preview)\n</code>"])
+    agent.stream_outputs = False
+    agent.run("畫石頭", reset=True)
+    assert agent.model.calls == 2
+    assert _has_image(agent.model.seen[1]) and not _has_image(agent.model.seen[0])
+    assert (tmp_path / "review_stone.png").exists()
+
+
+def test_review_redraw_makes_new_version_and_respects_limit(tmp_path):
+    os.environ["DATA_DIR"] = str(tmp_path / "data")
+    os.environ["OUTPUT_DIR"] = str(tmp_path)
+    os.environ["REVIEW_ROUNDS"] = "1"
+    try:
+        agent = build_agent()
+    finally:
+        os.environ.pop("REVIEW_ROUNDS")
+    save_only = CODE_STONE.format(name="r_stone").replace("final_answer(preview)", "pass")
+    # 存檔 → 看圖 → 重畫存檔（已達上限）→ 直接結束也被允許
+    agent.model = RecordingModel([save_only, save_only, "<code>\nfinal_answer(preview)\n</code>"])
+    agent.stream_outputs = False
+    agent.run("畫石頭", reset=True)
+    assert (tmp_path / "r_stone.png").exists() and (tmp_path / "r_stone_v2.png").exists()
+    assert agent.model.calls == 3
+    assert not _has_image(agent.model.seen[2])  # 超過上限後不再附圖
+
+
+def test_review_can_be_disabled(tmp_path):
+    os.environ["DATA_DIR"] = str(tmp_path / "data")
+    os.environ["OUTPUT_DIR"] = str(tmp_path)
+    os.environ["REVIEW_ROUNDS"] = "0"
+    try:
+        agent = build_agent()
+    finally:
+        os.environ.pop("REVIEW_ROUNDS")
+    assert agent.review is None

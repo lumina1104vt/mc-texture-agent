@@ -98,8 +98,21 @@ def stamp_ascii(img: np.ndarray, rows: list[str], palette: dict, x: int = 0, y: 
     """把用文字畫的圖案蓋到畫布上，左上角放在 (x, y)。
 
     rows 是字串列表，每個字元代表一個像素，palette 把字元對應到顏色。
-    '.' 表示不動（保留原本的像素）；其他字元必須在 palette 裡。超出畫布的部分會被裁掉。
+    '.' 表示不動（保留原本的像素）；其他字元必須在 palette 裡。
+    每一列長度必須一致，而且整個圖案必須完整放得進 16×16 畫布，否則丟出錯誤（不會默默裁掉）。
     """
+    if not rows:
+        raise ValueError("rows is empty: give at least one string.")
+    widths = {len(r) for r in rows}
+    if len(widths) != 1:
+        detail = ", ".join(f"row {j} has {len(r)}" for j, r in enumerate(rows))
+        raise ValueError(f"All rows must have the same length, got different lengths ({detail}).")
+    width, height = widths.pop(), len(rows)
+    if x < 0 or y < 0 or x + width > SIZE or y + height > SIZE:
+        raise ValueError(
+            f"The {width}x{height} pattern placed at x={x}, y={y} does not fit in the {SIZE}x{SIZE} canvas "
+            f"(it would cover x {x}..{x + width - 1}, y {y}..{y + height - 1}). Fix the rows or the position."
+        )
     colors = {ch: _rgba(c) for ch, c in palette.items()}
     for j, row in enumerate(rows):
         for i, ch in enumerate(row):
@@ -107,9 +120,7 @@ def stamp_ascii(img: np.ndarray, rows: list[str], palette: dict, x: int = 0, y: 
                 continue
             if ch not in colors:
                 raise ValueError(f"Character {ch!r} in row {j} is not in the palette (palette has {sorted(colors)}).")
-            px, py = x + i, y + j
-            if 0 <= px < SIZE and 0 <= py < SIZE:
-                img[py, px] = colors[ch]
+            img[y + j, x + i] = colors[ch]
     return img
 
 

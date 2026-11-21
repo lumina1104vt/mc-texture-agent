@@ -103,6 +103,10 @@ class SaveTextureTool(Tool):
         super().__init__()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # 給「畫完回頭看」使用：最近一次成功存檔的預覽圖與檔名
+        self.last_preview: Image.Image | None = None
+        self.last_file: str = ""
+        self.pending_review: bool = False
 
     def forward(self, image, name: str, kind: str | None = None):
         if not isinstance(name, str) or not _NAME_PATTERN.match(name):
@@ -132,7 +136,10 @@ class SaveTextureTool(Tool):
         preview = img.resize(
             (TEXTURE_SIZE * PREVIEW_SCALE, TEXTURE_SIZE * PREVIEW_SCALE), Image.Resampling.NEAREST
         )
-        return _caption(preview, path.name)
+        self.last_preview = _caption(preview, path.name)
+        self.last_file = path.name
+        self.pending_review = True
+        return self.last_preview
 
     def _record(self, base: str, kind: str) -> None:
         manifest = load_manifest(self.output_dir)
