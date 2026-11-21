@@ -23,7 +23,7 @@ def load_references() -> ReferenceIndex | None:
 
 def main() -> None:
     references = load_references()
-    ui = TextureGradioUI(build_agent(references), references=references, reset_agent_memory=True)
+    ui = TextureGradioUI(build_agent(references), references=references, reset_agent_memory=False)
     ui.launch(
         share=False,
         server_name=os.environ.get("HOST", "0.0.0.0"),

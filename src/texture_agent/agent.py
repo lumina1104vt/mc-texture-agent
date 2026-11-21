@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from smolagents import CodeAgent, OpenAIServerModel
+from smolagents.agents import ActionOutput
+from smolagents.utils import AgentParsingError
 
+from .extra_tools import ExportPackTool, GetThemeTool, SaveThemeTool
 from .reference import ReferenceIndex
 from .reference_tool import FindReferenceTexturesTool
 from .skill import load_skill_text
+from .theme_memory import ThemeStore
 from .tools import SaveTextureTool
 
 INSTRUCTIONS = """\
@@ -24,9 +29,23 @@ How to work:
    (0 = left), y is the row (0 = top). Use alpha 0 only where the texture is genuinely transparent
    (outside an item's outline, the holes of glass or leaves); every other pixel must be fully
    opaque (alpha 255).
-3. Call save_texture(image=..., name=...) with the finished texture. It returns a preview image.
+3. Call save_texture(image=..., name=..., kind="block" or "item") with the finished texture. It checks
+   quality (not empty, a small clean palette, no random noise) and returns a preview image labelled with the
+   saved file name.
 4. If save_texture or your code raises an error, read the message, fix the code and try again.
 5. Finish with final_answer(preview), passing the preview image returned by save_texture.
+
+Changing an existing texture: when the user asks for a change ("brighter", "make the gems bigger"), redraw it and
+call save_texture with the SAME name. The old file is kept and the new one is saved as a new version
+(name_v2.png, name_v3.png...), so never invent version suffixes yourself.
+
+Themes: if the user mentions a theme or a palette to keep, call get_theme(theme_name) before drawing and
+save_theme(theme_name, description, palette, style_notes) to store it. When the user asks to export or package
+their textures, call export_resource_pack(mod_id) and report the result with final_answer(text).
+
+Talking to the user: when you only need to speak (answer a question, ask for details, explain something,
+greet), reply in plain Traditional Chinese with no <code> block. A reply without code is shown to the user
+and ends your turn. Never use print() to talk to the user: they cannot see print output.
 
 texture_kit (import it; do not do pixel arithmetic by hand):
   from texture_kit import new_canvas, shade, set_pixel, fill_rect, draw_line, from_ascii, stamp_ascii, mirror_x, outline, bevel
@@ -50,7 +69,7 @@ Example (a gem on a stone background):
   img = new_canvas(base)
   stamp_ascii(img, [".AA.", "ABBA", "ABBA", ".AA."], {"A": shade((200, 30, 60), -40), "B": (200, 30, 60)}, x=5, y=6)
   bevel(img, light=20, dark=20)
-  preview = save_texture(image=img, name="example")
+  preview = save_texture(image=img, name="example", kind="block")
 """
 
 REFERENCE_INSTRUCTIONS = """\
@@ -63,6 +82,31 @@ Skip the search when the request is abstract or the style guide already covers i
 """
 
 
+class TextureCodeAgent(CodeAgent):
+    """CodeAgent，但沒有程式碼區塊的回覆會直接當成對使用者的回答並結束這一輪。
+
+    smolagents 預設把「沒有 code block」視為格式錯誤並要求重試，模型想單純說話時就會一直卡在重試。
+    """
+
+    def _step_stream(self, memory_step):
+        open_tag, close_tag = self.code_block_tags
+        try:
+            yield from super()._step_stream(memory_step)
+        except AgentParsingError:
+            text = (memory_step.model_output or "").strip()
+            if text.endswith(close_tag):  # 父類別會替輸出補上結尾標籤，這裡還原
+                text = text[: -len(close_tag)].rstrip()
+            if not text or open_tag in text or "```" in text:
+                raise  # 空白、或看起來是格式錯誤的程式碼：維持原本的重試
+            if text.lower().startswith("thought:"):
+                text = text[len("thought:"):].strip()
+            memory_step.model_output = text
+            if memory_step.model_output_message is not None:
+                memory_step.model_output_message.content = text
+            memory_step.action_output = text
+            yield ActionOutput(output=text, is_final_answer=True)
+
+
 def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
     model = OpenAIServerModel(
         model_id=os.environ["LLM_MODEL"],
@@ -70,13 +114,15 @@ def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
         api_key=os.environ.get("LLM_API_KEY", "not-needed"),
     )
 
-    tools = [SaveTextureTool(os.environ.get("OUTPUT_DIR", "output"))]
+    output_dir = os.environ.get("OUTPUT_DIR", "output")
+    themes = ThemeStore(Path(os.environ.get("DATA_DIR", "data")) / "themes")
+    tools = [SaveTextureTool(output_dir), GetThemeTool(themes), SaveThemeTool(themes), ExportPackTool(output_dir)]
     instructions = INSTRUCTIONS
     if references is not None:
         tools.append(FindReferenceTexturesTool(references))
         instructions += REFERENCE_INSTRUCTIONS
 
-    return CodeAgent(
+    return TextureCodeAgent(
         tools=tools,
         model=model,
         instructions=instructions + "\n\n# Style guide (skill)\n\n" + load_skill_text(),

@@ -44,6 +44,7 @@ podman save -o mc-texture-agent.tar mc-texture-agent
 | `OUTPUT_DIR` | PNG 輸出資料夾 | 容器內 `/app/output` |
 | `PORT` | Web UI 連接埠 | `7860` |
 | `REFERENCE_DIR` | 參考材質來源資料夾（jar / zip / 解壓後的資源包） | 容器內 `/app/reference` |
+| `DATA_DIR` | 主題記憶存放處（`themes/` 底下的 JSON） | 容器內 `/app/data` |
 | `INDEX_DIR` | 參考材質的 Chroma 索引資料夾 | 容器內 `/app/index` |
 | `CHAT_HEIGHT` | 對話區高度（CSS 長度，例如 `75vh`、`600px`） | `75vh` |
 
@@ -93,10 +94,17 @@ Agent 生成的程式碼可以 `from texture_kit import ...`，用現成的函�
 
 1. **掛載資料夾**：把 `.jar`、`.zip` 或解壓後含 `assets/` 的資料夾放進 `reference/`，啟動時自動掃描：
    ```bash
-   mkdir -p output reference index
+   mkdir -p output reference index data
    podman run --rm -p 7860:7860 --env-file .env \
-     -v ./output:/app/output:Z -v ./reference:/app/reference:Z -v ./index:/app/index:Z mc-texture-agent
+     -v ./output:/app/output:Z -v ./reference:/app/reference:Z -v ./index:/app/index:Z -v ./data:/app/data:Z mc-texture-agent
    ```
 2. **對話中上傳**：在輸入框附加 `.jar` / `.zip`（只傳檔案、不輸入文字時不會啟動 Agent），會存到 `reference/uploads/` 並立即建立索引。
 
 索引範圍：`assets/<namespace>/textures/block(s)|item(s)/` 底下的 PNG，只用檔名做 embedding（Chroma 預設的 all-MiniLM-L6-v2）。每次啟動與每次上傳都是增量同步：沒變的檔案不重做，來源被刪掉會一併移除。Agent 透過 `find_reference_textures(query, kind, top_k)` 取得 16×16 的 ASCII 圖與色票。
+
+## 修改、品質檢查、主題與匯出
+
+- **存新版本**：同一個名稱再存一次不會覆蓋，會變成 `ruby_ore.png`、`ruby_ore_v2.png`、`ruby_ore_v3.png`…。對話中說「再亮一點」，Agent 會重畫並存成新版本，預覽圖下方會標示檔名。
+- **品質檢查**（`save_texture` 內建，不通過就不存檔，原因回給 Agent 重畫）：幾乎全透明、顏色超過 48 種、顏色散亂像雜訊。指標改寫自 skill 的 `mc_style_audit.py`。
+- **主題記憶**：`get_theme` / `save_theme` 把色票與風格備註存成 JSON（`DATA_DIR/themes/`），之後的材質可沿用。
+- **匯出資源包**：說「匯出」，Agent 呼叫 `export_resource_pack(mod_id)`，把每個名稱的最新版本整理成 `assets/<mod_id>/textures/block|item/` 加上 models、blockstates 與 `pack.mcmeta`（pack_format 34，Minecraft 1.21.1），輸出 `output/<mod_id>_resourcepack.zip`。

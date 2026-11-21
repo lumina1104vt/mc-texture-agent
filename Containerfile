@@ -16,10 +16,11 @@ ENV PYTHONPATH=/app/src \
     OUTPUT_DIR=/app/output \
     REFERENCE_DIR=/app/reference \
     INDEX_DIR=/app/index \
+    DATA_DIR=/app/data \
     HOST=0.0.0.0 \
     PORT=7860
 
 EXPOSE 7860
-VOLUME ["/app/output", "/app/reference", "/app/index"]
+VOLUME ["/app/output", "/app/reference", "/app/index", "/app/data"]
 
 CMD ["python", "-m", "texture_agent"]
