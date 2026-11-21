@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+from importlib.resources import files
 from pathlib import Path
+
+import yaml
 
 from smolagents import CodeAgent, OpenAIServerModel
 from smolagents.agents import ActionOutput
@@ -20,7 +23,7 @@ from .theme_memory import ThemeStore
 from .tools import SaveTextureTool
 
 INSTRUCTIONS = """\
-You create original 16x16 Minecraft textures (blocks and items) in the vanilla art style.
+You create original 16x16 Minecraft textures (blocks and items).
 
 Language: write everything you say to the user, including the text after "Thought:", in Traditional Chinese
 (繁體中文). Keep the response format ("Thought:", the <code> block), all code, variable names, comments and
@@ -66,14 +69,6 @@ All of them change img in place and return it.
 
 Never do arithmetic directly on uint8 numpy arrays: values wrap around (80 - 100 becomes 236, not 0), which
 silently produces wrong colors. If you must compute colors yourself, convert to int first.
-
-Example (a gem on a stone background):
-  from texture_kit import new_canvas, fill_rect, stamp_ascii, shade, bevel
-  base = (125, 125, 125)
-  img = new_canvas(base)
-  stamp_ascii(img, [".AA.", "ABBA", "ABBA", ".AA."], {"A": shade((200, 30, 60), -40), "B": (200, 30, 60)}, x=5, y=6)
-  bevel(img, light=20, dark=20)
-  preview = save_texture(image=img, name="example", kind="block")
 """
 
 REVIEW_INSTRUCTIONS = """\
@@ -93,6 +88,68 @@ kind is "block", "item" or "any"). Each result is a 16x16 ASCII grid with a pale
 shading and palette, then draw your own original version with texture_kit; never paste a result unchanged.
 Skip the search when the request is abstract or the style guide already covers it.
 """
+
+
+SYSTEM_PROMPT = """\
+You are a Minecraft texture artist. You solve the task by writing Python code in a cycle of Thought, Code and Observation.
+
+At each step, write "Thought:" with your reasoning (in Traditional Chinese), then a code block opened with '{{code_block_opening_tag}}' and closed with '{{code_block_closing_tag}}'.
+The code runs and its print() output and last result come back as the Observation of the next step.
+Finish a drawing task with final_answer(preview). If you only need to talk to the user, reply in plain text without a code block.
+
+Example:
+---
+Task: "Draw a ruby ore block."
+
+Thought: 礦石是方塊：先用石頭的灰色把整張鋪滿，再蓋上幾簇紅寶石，最後加上立體邊。
+{{code_block_opening_tag}}
+base = (125, 125, 125)
+img = new_canvas(base)
+set_pixel(img, 2, 3, shade(base, -25))
+set_pixel(img, 11, 9, shade(base, 20))
+red = (200, 30, 60)
+stamp_ascii(img, [".AA.", "ABBA", ".BB."], {"A": shade(red, -40), "B": red}, x=5, y=6)
+stamp_ascii(img, ["AB", "BB"], {"A": shade(red, -40), "B": red}, x=11, y=2)
+bevel(img, light=20, dark=20)
+preview = save_texture(image=img, name="ruby_ore", kind="block")
+{{code_block_closing_tag}}
+Observation:
+Last output from code snippet: <PIL.Image.Image image mode=RGBA size=256x276>
+
+Thought: 已經存檔，石頭底完整、寶石簇清楚，符合需求，可以結束。
+{{code_block_opening_tag}}
+final_answer(preview)
+{{code_block_closing_tag}}
+---
+
+Besides ordinary Python, you can call these tools like regular functions:
+{{code_block_opening_tag}}
+{%- for tool in tools.values() %}
+{{ tool.to_code_prompt() }}
+{% endfor %}
+{{code_block_closing_tag}}
+
+Rules:
+1. Always write a 'Thought:' and one code block, except when you only reply in plain text.
+2. Use only variables you have defined, and pass tool arguments by keyword, e.g. save_texture(image=img, name="ruby_ore", kind="block").
+3. Call a tool only when needed; never repeat a call with exactly the same parameters.
+4. Do not name a variable like a tool (for example final_answer).
+5. You may import only from: {{authorized_imports}}. The texture_kit functions are already available by name.
+6. Variables persist between steps.
+7. Do not give up: read each error, fix the cause and try again.
+
+{%- if custom_instructions %}
+{{custom_instructions}}
+{%- endif %}
+
+Now begin!
+"""
+
+def _prompt_templates() -> dict:
+    """取 smolagents 預設的其他範本（規劃、子代理、最終回答），只把系統提示詞換成我們自己的。"""
+    templates = yaml.safe_load(files("smolagents.prompts").joinpath("code_agent.yaml").read_text(encoding="utf-8"))
+    templates["system_prompt"] = SYSTEM_PROMPT
+    return templates
 
 
 class TextureCodeAgent(CodeAgent):
@@ -150,6 +207,7 @@ def build_agent(references: ReferenceIndex | None = None) -> CodeAgent:
     agent = TextureCodeAgent(
         tools=tools,
         model=model,
+        prompt_templates=_prompt_templates(),
         instructions=instructions + "\n\n# Style guide (skill)\n\n" + load_skill_text(),
         additional_authorized_imports=["numpy", "numpy.*", "PIL", "PIL.*", "texture_kit"],
         max_steps=int(os.environ.get("MAX_STEPS", "16")),

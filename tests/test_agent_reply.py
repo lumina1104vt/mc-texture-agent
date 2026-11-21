@@ -153,3 +153,19 @@ final_answer(preview)
     agent = make(tmp_path, [code])
     agent.run("x", reset=True)
     assert (tmp_path / "noimport.png").exists()
+
+
+def test_own_system_prompt_replaces_the_default_template(tmp_path):
+    os.environ["DATA_DIR"] = str(tmp_path / "data")
+    os.environ["OUTPUT_DIR"] = str(tmp_path)
+    agent = build_agent()
+    sp = agent.system_prompt
+    for gone in ("document_qa", "web_search", "wikipedia_search", "image_generator", "translator", "Stanislaus"):
+        assert gone not in sp
+    for needed in ("save_texture", "get_theme", "export_resource_pack", "final_answer", "<code>", "</code>", "ruby_ore",
+                   "texture_kit", "minecraft-texture-craft", "Traditional Chinese"):
+        assert needed in sp, needed
+    assert "vanilla art style" not in sp
+    assert "{{" not in sp and "{%" not in sp  # 樣板變數都已經代入
+    assert len(sp) < 22000  # 原本約 3.3 萬字元
+    assert "numpy" in sp  # authorized_imports 有代入
